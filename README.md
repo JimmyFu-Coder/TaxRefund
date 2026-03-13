@@ -29,6 +29,174 @@ The current OCR flow is:
 
 This hybrid approach is intentional: no single layer was reliable enough on its own.
 
+### Current Synchronous AWS Architecture
+
+This is the current architecture implemented in the project.
+
+```text
+[Mobile App]
+    |
+    | capture receipt image
+    v
+[Expo / React Native Client]
+    |
+    | Base64 image payload over HTTPS
+    v
+[API Gateway]
+    |
+    v
+[AWS Lambda OCR Handler]
+    |
+    |-- try --> [Textract AnalyzeExpense]
+    |-- fallback -> [Textract AnalyzeDocument]
+    |
+    |-- optional recovery --> [Bedrock Claude]
+    v
+[Merged Structured Result]
+    |
+    v
+[Client UI + Local Storage]
+```
+
+Why this synchronous version was a good starting point:
+
+- simple to build and demo quickly
+- easy to debug end-to-end
+- good for validating OCR quality before adding infrastructure complexity
+- enough for low-volume usage and interview demonstration
+
+Its limitations:
+
+- the client waits for the full OCR round trip
+- long-running OCR/LLM calls can hurt UX
+- retries, rate limits, and job tracking are limited
+- it is not ideal for higher throughput or production-scale processing
+
+### Production-Oriented Asynchronous AWS Architecture
+
+If I were evolving this into a more production-ready design, I would move to an async job architecture.
+
+```text
+[Mobile App]
+    |
+    | upload image / create job
+    v
+[API Gateway]
+    |
+    v
+[Lambda: Create Job]
+    |
+    |-- store original image --> [S3]
+    |-- write job metadata --> [DynamoDB]
+    |-- enqueue work -------> [SQS]
+                                |
+                                v
+                        [Lambda Worker / Step Functions]
+                                |
+                                |-- OCR --> [Textract]
+                                |-- recovery --> [Bedrock Claude]
+                                |-- validation / merge --> [Rules Engine]
+                                v
+                        [DynamoDB Job Result]
+                                |
+                                v
+                      [Client Polling or Webhook/Event Push]
+```
+
+Why the async version is stronger for production:
+
+- decouples upload from processing
+- supports retries and dead-letter queues
+- scales better for bursts of receipt uploads
+- enables per-stage observability and cost control
+- makes it easier to add confidence scoring, human review, and reprocessing
+
+## Architecture Evolution
+
+I would describe the project evolution in versions rather than as a single static design.
+
+### V1: Basic OCR Prototype
+
+- mobile app sends image to Lambda
+- Lambda uses a simple Textract text detection flow
+- output is mostly raw text
+
+What it proved:
+
+- the end-to-end pipeline worked
+- text extraction was possible
+- raw OCR alone was not enough for usable finance data
+
+### V2: OCR + Regex Parsing
+
+- added regex-based field extraction for date, total, vendor, and line items
+- introduced deterministic parsing and text cleanup
+
+What improved:
+
+- lower-cost structured extraction
+- much better results on common receipt formats
+- easier debugging because each rule was inspectable
+
+What still failed:
+
+- noisy OCR text
+- irregular layouts
+- partial semantic understanding
+
+### V3: Receipt-Specific Textract with `AnalyzeExpense`
+
+- moved from generic text extraction toward receipt-aware AWS OCR
+- used `AnalyzeExpense` to get summary fields and line item groups
+
+What improved:
+
+- cleaner merchant/date/total extraction on good receipts
+- less dependence on custom parsing for standard cases
+
+What still failed:
+
+- incomplete fields on some receipts
+- inconsistent line-item quality
+
+### V4: `AnalyzeDocument` Fallback + Block Heuristics
+
+- added fallback from `AnalyzeExpense` to `AnalyzeDocument`
+- parsed `Blocks` to reconstruct layout
+- introduced coordinate-based line grouping and item-price extraction
+
+What improved:
+
+- stronger resilience when the receipt-specific API underperformed
+- better recovery from layout-heavy receipts
+- more control over how OCR output was interpreted
+
+### V5: LLM Recovery Layer
+
+- added Bedrock Claude to post-process OCR text into normalized JSON
+- used LLM output as a recovery path, not as the sole parser
+
+What improved:
+
+- better handling of ambiguous or broken OCR output
+- improved extraction recall on messy receipts
+- reduced the need for endless rule writing on edge cases
+
+Tradeoff introduced:
+
+- higher inference cost
+- lower determinism
+
+### V6: Productionization Roadmap
+
+This is the next architecture step rather than a fully implemented stage.
+
+- move from synchronous request/response to async job processing
+- store images in S3 and metadata/results in DynamoDB
+- add SQS or Step Functions for orchestration
+- add confidence scoring, retries, observability, and cost gating
+- support human correction for low-confidence outputs
+
 ## Why A Hybrid Pipeline
 
 Receipts are messy. In practice, the failures were rarely "no text at all". The real failures were:
@@ -269,16 +437,6 @@ Tradeoffs I made intentionally:
 - Fallbacks over purity: using both `AnalyzeExpense` and `AnalyzeDocument` increased resilience.
 - Recoverability over elegance: retaining raw text, parsed lines, and multiple extraction stages made failures easier to inspect.
 
-## What I Would Highlight In An Interview
-
-If I were walking an interviewer through this project, I would emphasize:
-
-- I did not treat OCR as "call one API and hope it works"
-- I iterated from receipt-specific OCR to general document OCR with explicit fallback logic
-- I combined deterministic parsing and probabilistic parsing for better robustness
-- I used the LLM as a bounded post-processing tool rather than the primary source of truth
-- I designed the pipeline around real failure modes: missing labels, layout issues, OCR noise, and partial extraction
-
 ## Core Files
 
 - [lambda/ocr.js](/home/jimmy/WebstormProjects/TaxRefund/TaxRefund/lambda/ocr.js): AWS Lambda OCR orchestration, Textract fallback logic, block parsing, LLM post-processing
@@ -321,3 +479,7 @@ If I continued this project, the next technical improvements would be:
 - add validation rules between regex and LLM outputs
 - build a receipt benchmark set and measure extraction accuracy by field
 - support human-in-the-loop correction for uncertain extractions
+- evolve the current synchronous API flow into an async AWS job architecture using S3, DynamoDB, and SQS or Step Functions
+- add structured logging, tracing, and per-stage metrics for Textract fallback rate, LLM usage rate, latency, and cost per receipt
+- add LLM invocation gating so the model runs only when OCR structure is incomplete or confidence is low
+- separate dev/staging/prod infrastructure and manage it with IaC such as CDK or Terraform
