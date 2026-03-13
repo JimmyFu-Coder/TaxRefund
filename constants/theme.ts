@@ -5,8 +5,8 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const tintColorLight = '#16a34a';  // 改为绿色
+const tintColorDark = '#22c55e';   // 深色模式绿色
 
 export const Colors = {
   light: {

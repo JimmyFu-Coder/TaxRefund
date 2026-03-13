@@ -1,15 +1,25 @@
 {
   "expo": {
     "name": "TaxRefund",
-    "slug": "TaxRefund",
+    "slug": "taxrund",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "taxrefund",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "owner": "jimmyfu123",
+    "extra": {
+      "eas": {
+        "projectId": "ce9e2be9-3ff2-4e8a-9c3f-adabf1bfe009"
+      }
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.TaxRefund",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +29,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.TaxRefund"
     },
     "web": {
       "output": "static",
@@ -37,6 +48,15 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      "@rentcheck/expo-ocr",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow TaxRefund to access your photos to save receipt images.",
+          "savePhotosPermission": "Allow TaxRefund to save receipt images to your photo library.",
+          "isAccessMediaLocationEnabled": true
         }
       ]
     ],
