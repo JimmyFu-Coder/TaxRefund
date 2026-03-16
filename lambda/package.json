@@ -4,13 +4,22 @@
   "description": "",
   "main": "ocr.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@aws-sdk/client-textract": "^3.1006.0"
+    "@aws-sdk/client-textract": "^3.1006.0",
+    "@aws-sdk/client-s3": "^3.100.0",
+    "@aws-sdk/client-dynamodb": "^3.100.0",
+    "@aws-sdk/client-sqs": "^3.100.0",
+    "@aws-sdk/lib-dynamodb": "^3.100.0",
+    "uuid": "^9.0.0"
   }
 }

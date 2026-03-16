@@ -437,9 +437,66 @@ Tradeoffs I made intentionally:
 - Fallbacks over purity: using both `AnalyzeExpense` and `AnalyzeDocument` increased resilience.
 - Recoverability over elegance: retaining raw text, parsed lines, and multiple extraction stages made failures easier to inspect.
 
+## Lambda Architecture (Refactored)
+
+The Lambda functions have been refactored into a layered, decoupled architecture:
+
+### File Structure
+
+```
+lambda/
+├── config.js              # AWS configuration and constants
+├── utils.js               # Common utility functions
+├── createJob.js           # Creates job, stores image to S3, writes to DynamoDB, enqueues to SQS
+├── worker.js              # Processes OCR (Textract + Bedrock), updates job status
+├── ocr.js                 # Original synchronous OCR handler (kept for compatibility)
+├── services/
+│   ├── s3.js              # S3 storage service
+│   ├── dynamodb.js        # DynamoDB job operations
+│   └── sqs.js             # SQS queue service
+├── __tests__/             # Unit tests
+│   ├── config.test.js
+│   ├── utils.test.js
+│   ├── createJob.test.js
+│   ├── worker.test.js
+│   └── services/
+│       ├── s3.test.js
+│       ├── dynamodb.test.js
+│       └── sqs.test.js
+└── deploy.sh              # Deployment script
+```
+
+### Architecture Diagram
+
+```
+[API Gateway]
+    |
+    v
+[Lambda: createJob.js]
+    |-- store image --> [S3]
+    |-- write metadata --> [DynamoDB]
+    |-- enqueue work --> [SQS]
+                            |
+                            v
+                    [Lambda: worker.js]
+                            |
+                            |-- OCR --> [Textract]
+                            |-- recovery --> [Bedrock Claude]
+                            |-- update status --> [DynamoDB]
+```
+
+### Lambda Functions
+
+- **createJob**: Receives image, creates job record, returns jobId immediately
+- **worker**: Processes OCR asynchronously (triggered by SQS)
+- **ocr**: Original synchronous handler (kept for backward compatibility)
+
 ## Core Files
 
+- [lambda/createJob.js](/home/jimmy/WebstormProjects/TaxRefund/TaxRefund/lambda/createJob.js): Job creation handler
+- [lambda/worker.js](/home/jimmy/WebstormProjects/TaxRefund/TaxRefund/lambda/worker.js): Async OCR processing worker
 - [lambda/ocr.js](/home/jimmy/WebstormProjects/TaxRefund/TaxRefund/lambda/ocr.js): AWS Lambda OCR orchestration, Textract fallback logic, block parsing, LLM post-processing
+- [lambda/services/](/home/jimmy/WebstormProjects/TaxRefund/TaxRefund/lambda/services): AWS service abstractions (S3, DynamoDB, SQS)
 - [services/receipt-ocr.ts](/home/jimmy/WebstormProjects/TaxRefund/TaxRefund/services/receipt-ocr.ts): regex extraction, text parsing, line-item heuristics, data normalization
 - [services/tesseract-ocr.ts](/home/jimmy/WebstormProjects/TaxRefund/TaxRefund/services/tesseract-ocr.ts): mobile-side OCR request client
 - [components/receipt-camera.tsx](/home/jimmy/WebstormProjects/TaxRefund/TaxRefund/components/receipt-camera.tsx): receipt capture and OCR invocation flow
@@ -452,7 +509,8 @@ Tradeoffs I made intentionally:
 - AWS Lambda
 - AWS Textract
 - AWS Bedrock Claude
-- AsyncStorage
+- AWS S3, DynamoDB, SQS
+- Jest (testing)
 
 ## Running Locally
 
@@ -468,6 +526,14 @@ npm run android
 npm run ios
 npm run web
 npm run lint
+```
+
+## Running Lambda Tests
+
+```bash
+cd lambda
+npm install
+npm test
 ```
 
 ## Future Improvements
