@@ -1,0 +1,12 @@
+{
+  "total": 5,
+  "success": 0,
+  "failed": 5,
+  "errorRate": "100.00",
+  "avgLatency": "1.00",
+  "p50": 1,
+  "p95": 3,
+  "p99": 3,
+  "duration": "0.00",
+  "throughput": "0.00"
+}

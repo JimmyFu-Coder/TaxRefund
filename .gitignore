@@ -46,3 +46,8 @@ app-example
 /android
 
 .sec
+
+# Test receipts data
+../test-receipts/
+../generate_receipts.js
+../test-ocr-accuracy.js

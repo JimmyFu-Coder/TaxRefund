@@ -536,7 +536,7 @@ exports.handler = async (event) => {
         };
       }
 
-      const { imageBase64 } = body;
+      const { imageBase64, disableLLM } = body;
 
       if (!imageBase64) {
         return {
@@ -547,6 +547,7 @@ exports.handler = async (event) => {
       }
 
       // 调用 Textract AnalyzeExpense (专为收据/发票设计)
+      // disableLLM 参数用于测试：true=仅OCR, false=OCR+LLM
       // 同时也调用 AnalyzeDocument 作为后备
       try {
         // 首先尝试 Expense API
@@ -597,10 +598,10 @@ exports.handler = async (event) => {
             plainText = summaryText + (plainText ? '\n' + plainText : '');
           }
 
-          // 使用 LLM 进行后处理
+          // 使用 LLM 进行后处理（当 disableLLM 为 false 时）
           let llmResult = null;
           try {
-            if (plainText && plainText.trim().length > 0) {
+            if (plainText && plainText.trim().length > 0 && !disableLLM) {
               llmResult = await parseReceiptWithLLM(plainText);
             }
           } catch (llmError) {
@@ -657,10 +658,10 @@ exports.handler = async (event) => {
           const keyValuePairs = extractKeyValuePairs(blocks);
           const lineItems = extractLineItems(blocks);
 
-          // 使用 LLM 进行后处理
+          // 使用 LLM 进行后处理（当 disableLLM 为 false 时）
           let llmResult = null;
           try {
-            if (plainText && plainText.trim().length > 0) {
+            if (plainText && plainText.trim().length > 0 && !disableLLM) {
               llmResult = await parseReceiptWithLLM(plainText);
             }
           } catch (llmError) {
